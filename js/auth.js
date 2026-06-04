@@ -1,17 +1,28 @@
-﻿// ===== 央国企招聘平台 - 认证模块 =====
+// ===== 央国企招聘平台 - 认证模块 =====
 (function(){
 "use strict";
 
 // ===== Auth State =====
 var currentUser = null;
 
-function loadUser() {
+async function loadUser() {
   try {
+    // 优先尝试从API恢复会话
+    if (typeof API !== "undefined" && API.isLoggedIn && API.isLoggedIn()) {
+      try {
+        var apiUser = await API.getMe();
+        if (apiUser && apiUser.success && apiUser.user) {
+          currentUser = { account: apiUser.user.username, phone: apiUser.user.phone || "" };
+          saveUser();
+          return;
+        }
+      } catch(e) { API.logout(); }
+    }
+    // 降级：本地存储恢复
     var saved = localStorage.getItem("soe_user");
     if (saved) { currentUser = JSON.parse(saved); }
     var remember = localStorage.getItem("soe_remember");
     if (remember === "true" && !currentUser) {
-      // Try loading remembered account
       var remAcc = localStorage.getItem("soe_remembered_account");
       if (remAcc) {
         var users = JSON.parse(localStorage.getItem("soe_users") || "{}");
@@ -168,52 +179,49 @@ async function handleLogin() {
   if (!password) { showFieldError("loginPassword", "请输入密码"); valid = false; }
   if (!valid) return;
 
+  // 优先尝试后端API登录
+  var apiOk = false;
+  try {
+    if (typeof API !== "undefined" && API.login) {
+      var apiResp = await API.login(account, password);
+      if (apiResp && apiResp.success) {
+        currentUser = { account: apiResp.user.username, phone: apiResp.user.phone || "" };
+        apiOk = true;
+      }
+    }
+  } catch(e) { console.log("[Auth] API登录失败，降级到本地"); }
+
+  if (apiOk) {
+    saveUser();
+    if (remember) { localStorage.setItem("soe_remember", "true"); localStorage.setItem("soe_remembered_account", account); }
+    else { localStorage.removeItem("soe_remember"); localStorage.removeItem("soe_remembered_account"); }
+    closeAllModals(); updateAuthUI();
+    window.showToast("登录成功！", "success"); return;
+  }
+
+  // 降级：本地存储登录
   // Check users storage
   var users = {};
   try { users = JSON.parse(localStorage.getItem("soe_users") || "{}"); } catch(e) {}
-
-  // Compute hash of provided password
   var hashedInput = await hashPassword(password);
   if (!hashedInput) { showFieldError("loginPassword", "系统错误，请稍后再试"); return; }
-
-  // Try to find user by phone or account (support both hashed and legacy plaintext)
   var foundKey = null;
   var foundUser = null;
   Object.keys(users).forEach(function(key){
     var u = users[key];
     if (u.account === account || u.phone === account) {
-      // Check hashed password first, then legacy plaintext
       if ((u.passwordHash && u.passwordHash === hashedInput) || (!u.passwordHash && u.password === password)) {
-        foundKey = key;
-        foundUser = u;
-        // Auto-upgrade legacy plaintext to hash
-        if (!u.passwordHash) {
-          u.passwordHash = hashedInput;
-          u.password = null;
-          try { localStorage.setItem("soe_users", JSON.stringify(users)); } catch(e) {}
-        }
+        foundKey = key; foundUser = u;
+        if (!u.passwordHash) { u.passwordHash = hashedInput; u.password = null; try { localStorage.setItem("soe_users", JSON.stringify(users)); } catch(e) {} }
       }
     }
   });
-
-  if (!foundUser) {
-    showFieldError("loginPassword", "账号或密码错误");
-    return;
-  }
-
-  // Login success
+  if (!foundUser) { showFieldError("loginPassword", "账号或密码错误"); return; }
   currentUser = { account: foundUser.account, phone: foundUser.phone };
   saveUser();
-  if (remember) {
-    localStorage.setItem("soe_remember", "true");
-    localStorage.setItem("soe_remembered_account", foundKey);
-  } else {
-    localStorage.removeItem("soe_remember");
-    localStorage.removeItem("soe_remembered_account");
-  }
-
-  closeAllModals();
-  updateAuthUI();
+  if (remember) { localStorage.setItem("soe_remember", "true"); localStorage.setItem("soe_remembered_account", foundKey); }
+  else { localStorage.removeItem("soe_remember"); localStorage.removeItem("soe_remembered_account"); }
+  closeAllModals(); updateAuthUI();
   window.showToast("登录成功，欢迎回来！", "success");
 }
 
@@ -239,6 +247,17 @@ async function handleRegister() {
 
   if (!valid) return;
 
+  // 优先尝试后端API注册
+  var apiOk = false;
+  try {
+    if (typeof API !== "undefined" && API.register) {
+      var apiResp = await API.register(account, password, phone);
+      if (apiResp && apiResp.success) { apiOk = true; }
+    }
+  } catch(e) { console.log("[Auth] API注册失败，降级到本地"); }
+
+  // 降级：本地存储注册
+  if (!apiOk) {
   // Check if user already exists
   var users = {};
   try { users = JSON.parse(localStorage.getItem("soe_users") || "{}"); } catch(e) {}
@@ -260,13 +279,12 @@ async function handleRegister() {
   // Save user with hashed password
   var userKey = account;
   users[userKey] = { account: account, phone: phone, passwordHash: hashedPw, password: null, registeredAt: new Date().toISOString() };
-  
-  // Check localStorage quota
   try { localStorage.setItem("soe_users", JSON.stringify(users)); } 
   catch(e) { 
     if (e.name === "QuotaExceededError") { showFieldError("regPhone", "浏览器存储空间不足"); return; }
     throw e;
   }
+  } // end if (!apiOk)
 
   // Auto login
   currentUser = { account: account, phone: phone };
@@ -282,6 +300,7 @@ async function handleRegister() {
 
 // ===== Logout =====
 function handleLogout() {
+  if (typeof API !== "undefined" && API.logout) { API.logout(); }
   currentUser = null;
   saveUser();
   localStorage.removeItem("soe_remember");
@@ -309,8 +328,7 @@ function togglePassword(btn) {
 
 // ===== Init Auth =====
 function initAuth() {
-  loadUser();
-  updateAuthUI();
+  loadUser().then(function() { updateAuthUI(); }).catch(function() { updateAuthUI(); });
 
   // Login button click
   var btnLogin = document.getElementById("btnLogin");

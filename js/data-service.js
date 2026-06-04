@@ -1,4 +1,4 @@
-﻿// ===== 央国企招聘平台 - 动态数据服务层 =====
+// ===== 央国企招聘平台 - 动态数据服务层 =====
 // 模拟实时API，提供自动刷新、新职位推送、状态变更等功能
 // 当接入真实后端API时，只需替换本模块
 
@@ -279,6 +279,16 @@ const DataService = (function() {
     return { total: total, open: open, urgent: urgent, progress: progress, newCount: _newItemIds.length, version: _version };
   }
 
+
+  /** 从外部导入岗位数据（用于API同步） */
+  function importJobs(jobs) {
+    if (jobs && Array.isArray(jobs) && jobs.length > 0) {
+      _jobs = JSON.parse(JSON.stringify(jobs)).filter(function(j) { return j != null; });
+      _lastRefreshTime = new Date();
+      _version++;
+      _initialized = true;
+    }
+  }
   // ---- 公开接口 ----
   return {
     init: init,
@@ -291,7 +301,7 @@ const DataService = (function() {
     getNewItemIds: getNewItemIds,
     getNewCount: getNewCount,
     markAllSeen: markAllSeen,
-    getLastRefreshTime: getLastRefreshTime,
+    importJobs: importJobs,`r`n    getLastRefreshTime: getLastRefreshTime,
     getVersion: getVersion,
     getStats: getStats,
     setRefreshInterval: setRefreshInterval,

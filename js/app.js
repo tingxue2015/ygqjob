@@ -1,4 +1,4 @@
-﻿// ===== 央国企招聘平台 - 主应用逻辑 Part 1 =====
+// ===== 央国企招聘平台 - 主应用逻辑 Part 1 =====
 (function(){
 "use strict";
 var state = {
@@ -49,7 +49,7 @@ function renderPagination(total,totalPages,cur){
   return h+jump;
 }
 function renderJobTable() {
-  try { var filtered=DataService.getJobs().filter(matchFilters); var total=filtered.length; var totalPages=Math.ceil(total/state.pageSize)||1; if(state.jobPage>totalPages)state.jobPage=totalPages; var paged=filtered.slice((state.jobPage-1)*state.pageSize, state.jobPage*state.pageSize); var w=$("#jobTableWrap"); var c=$("#resultCount"); if(c)c.innerHTML="共 <strong>"+total+"</strong> 条，第 <strong>"+state.jobPage+"</strong>/<strong>"+totalPages+"</strong> 页";
+  try { var filtered=getJobsData().filter(matchFilters); var total=filtered.length; var totalPages=Math.ceil(total/state.pageSize)||1; if(state.jobPage>totalPages)state.jobPage=totalPages; var paged=filtered.slice((state.jobPage-1)*state.pageSize, state.jobPage*state.pageSize); var w=$("#jobTableWrap"); var c=$("#resultCount"); if(c)c.innerHTML="共 <strong>"+total+"</strong> 条，第 <strong>"+state.jobPage+"</strong>/<strong>"+totalPages+"</strong> 页";
   var h='<div class="table-scroll"><table class="job-table"><thead><tr>';
   ["公司名称","公司类型","所属行业","招聘类型","招聘对象","工作地点","岗位","投递进度","更新时间","截止时间","相关链接","招聘公告","笔试/面试","公司规模","备注"].forEach(function(x){h+="<th>"+x+"</th>";});
   h+="</tr></thead><tbody>";
@@ -73,7 +73,7 @@ function renderJobTable() {
   } catch(e) { console.error("renderJobTable error:", e); var w=$("#jobTableWrap"); if(w) w.innerHTML="<div style=\"padding:40px;text-align:center;color:#b91c1c\"><h3>表格渲染失败</h3><p>"+e.message+"</p><p>请刷新页面或联系技术支持</p></div>"; }
 }
 function renderJobCards() {
-  try { var filtered=DataService.getJobs().filter(matchFilters); var total=filtered.length; var totalPages=Math.ceil(total/state.pageSize)||1; if(state.jobPage>totalPages)state.jobPage=totalPages; var paged=filtered.slice((state.jobPage-1)*state.pageSize, state.jobPage*state.pageSize); var w=$("#jobTableWrap"); var c=$("#resultCount"); if(c)c.innerHTML="共 <strong>"+total+"</strong> 条，第 <strong>"+state.jobPage+"</strong>/<strong>"+totalPages+"</strong> 页";
+  try { var filtered=getJobsData().filter(matchFilters); var total=filtered.length; var totalPages=Math.ceil(total/state.pageSize)||1; if(state.jobPage>totalPages)state.jobPage=totalPages; var paged=filtered.slice((state.jobPage-1)*state.pageSize, state.jobPage*state.pageSize); var w=$("#jobTableWrap"); var c=$("#resultCount"); if(c)c.innerHTML="共 <strong>"+total+"</strong> 条，第 <strong>"+state.jobPage+"</strong>/<strong>"+totalPages+"</strong> 页";
   var h='<div class="card-grid">';
   paged.forEach(function(job){ var ds=daysUntil(job.deadline); var dc=dlClass(ds); var dt=dlText(ds);
     h+='<div class="job-card">';
@@ -97,7 +97,7 @@ function renderJobCards() {
 }
 function renderCampusPage() {
   var g=$("#campusGrid"); if(!g)return;
-  var jobs=DataService.getJobs().filter(function(j){return j.recruitType==="spring"||j.recruitType==="autumn"||j.recruitType==="makeup"||j.recruitType==="intern";});
+  var jobs=getJobsData().filter(function(j){return j.recruitType==="spring"||j.recruitType==="autumn"||j.recruitType==="makeup"||j.recruitType==="intern";});
   var h="";
   jobs.forEach(function(job){ var ds=daysUntil(job.deadline); var dc=dlClass(ds);
     h+='<div class="campus-card">';
@@ -224,7 +224,49 @@ function navigateTo(page) {
 }
 
 // ===== Init =====
+
+// ===== API数据同步 =====
+var _apiAvailable = false;
+
+async function syncJobsFromAPI() {
+  try {
+    var resp = await API.getJobs({ pageSize: 2000 });
+    if (resp && resp.success && resp.data && resp.data.length > 0) {
+      if (typeof DataService !== "undefined" && DataService.importJobs) {
+        DataService.importJobs(resp.data);
+      }
+      _apiAvailable = true;
+      console.log("[API] 同步 " + resp.data.length + " 条岗位数据到DataService");
+      // 触发UI刷新
+      updateLiveStats();
+      updateLiveIndicator();
+      if (state.currentPage === "home") {
+        state.jobPage = 1;
+        if (state.currentView === "table") renderJobTable();
+        else renderJobCards();
+      }
+      return true;
+    }
+  } catch (e) {
+    console.log("[API] 后端未连接，使用本地数据");
+    _apiAvailable = false;
+  }
+  return false;
+}
+
+function getJobsData() {
+  if (typeof DataService !== "undefined") {
+    var data = DataService.getJobs();
+    if (data && data.length > 0) return data;
+  }
+  return window.mockJobs || [];
+}
+
 function init() {
+  // 检查API连接并同步数据
+  syncJobsFromAPI().then(function(ok){
+    if(ok)console.log("[API] 数据同步完成");
+  });
   // Sidebar navigation
   $$(".nav-item").forEach(function(item){
     item.addEventListener("click",function(e){
@@ -295,7 +337,7 @@ function init() {
       if(!dd) return;
       if(state.searchQuery.length < 1) { dd.classList.remove("show"); return; }
       var q = state.searchQuery.toLowerCase();
-      var matches = DataService.getJobs().filter(function(j){return (j.company+j.job).toLowerCase().indexOf(q)!==-1;}).slice(0,6);
+      var matches = getJobsData().filter(function(j){return (j.company+j.job).toLowerCase().indexOf(q)!==-1;}).slice(0,6);
       if(matches.length===0){ dd.classList.remove("show"); return; }
       var hh = "";
       matches.forEach(function(m){
@@ -338,7 +380,7 @@ function init() {
       var sub = this.dataset.sub;
       var g = $("#campusGrid");
       if(!g) return;
-      var jobs = DataService.getJobs().filter(function(j){return j.recruitType==="spring"||j.recruitType==="autumn"||j.recruitType==="makeup"||j.recruitType==="intern";});
+      var jobs = getJobsData().filter(function(j){return j.recruitType==="spring"||j.recruitType==="autumn"||j.recruitType==="makeup"||j.recruitType==="intern";});
       if(sub==="campus") jobs = jobs.filter(function(j){return j.recruitType!=="intern";});
       if(sub==="intern") jobs = jobs.filter(function(j){return j.recruitType==="intern";});
       var h = "";
@@ -383,7 +425,7 @@ function init() {
     tableWrap.addEventListener("keydown", function(e){
       if(e.target.classList.contains("page-jump-input") && e.key === "Enter"){
         var page = parseInt(e.target.value);
-        var totalPages = Math.ceil(DataService.getJobs().filter(matchFilters).length / state.pageSize) || 1;
+        var totalPages = Math.ceil(getJobsData().filter(matchFilters).length / state.pageSize) || 1;
         if(page >= 1 && page <= totalPages){
           state.jobPage = page;
           if(state.currentView==="table") renderJobTable();
@@ -397,7 +439,7 @@ function init() {
       var input = jumpBtn.parentElement.querySelector(".page-jump-input");
       if(!input) return;
       var page = parseInt(input.value);
-      var totalPages = Math.ceil(DataService.getJobs().filter(matchFilters).length / state.pageSize) || 1;
+      var totalPages = Math.ceil(getJobsData().filter(matchFilters).length / state.pageSize) || 1;
       if(page >= 1 && page <= totalPages){
         state.jobPage = page;
         if(state.currentView==="table") renderJobTable();
@@ -410,7 +452,7 @@ function init() {
   try {
     if (typeof DataService === "undefined") throw new Error("DataService模块未加载，请检查data-service.js");
     DataService.init();
-    var initCheck = DataService.getJobs();
+    var initCheck = getJobsData();
     if (!initCheck || initCheck.length === 0) {
       console.warn("DataService初始化成功但无数据，请检查data.js是否正确加载");
     } else {
