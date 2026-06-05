@@ -1,4 +1,4 @@
-﻿// ===== 央国企招聘平台 - API客户端 =====
+// ===== 央国企招聘平台 - API客户端 =====
 // 封装所有后端API调用，支持本地数据降级
 
 const API = (function() {
@@ -12,14 +12,14 @@ const API = (function() {
     return "http://localhost:3000/api";
   })();
 
-  var _token = localStorage.getItem("ygqjob_token") || null;
+  var _token = (window.safeStorage && window.safeStorage.get("ygqjob_token", null)) || null;
   var _online = false;
 
   // ============ 内部方法 ============
   function setToken(t) {
     _token = t;
-    if (t) localStorage.setItem("ygqjob_token", t);
-    else localStorage.removeItem("ygqjob_token");
+    if (t) { (window.safeStorage && window.safeStorage.set("ygqjob_token", t)) || localStorage.setItem("ygqjob_token", t); }
+    else { (window.safeStorage && window.safeStorage.remove("ygqjob_token")) || localStorage.removeItem("ygqjob_token"); }
   }
 
   function headers() {
@@ -28,26 +28,41 @@ const API = (function() {
     return h;
   }
 
-  async function request(method, path, body) {
-    var opts = { method: method, headers: headers() };
-    if (body) opts.body = JSON.stringify(body);
-    try {
-      var resp = await fetch(BASE_URL + path, opts);
-      var data = await resp.json();
-      if (!resp.ok) {
-        if (resp.status === 401) { setToken(null); }
-        throw new Error(data.error || "请求失败");
-      }
-      _online = true;
-      return data;
-    } catch (err) {
-      _online = false;
-      throw err;
-    }
+  var FETCH_TIMEOUT = 10000;
+  function fetchWithTimeout(url, opts) {
+    var controller = new AbortController();
+    var timer = setTimeout(function() { controller.abort(); }, FETCH_TIMEOUT);
+    opts.signal = controller.signal;
+    return fetch(url, opts).finally(function() { clearTimeout(timer); });
   }
 
-  function get(path) { return request("GET", path); }
-  function post(path, body) { return request("POST", path, body); }
+  async function request(method, path, body, retries) {
+    retries = retries || 0;
+    var opts = { method: method, headers: headers() };
+    if (body) opts.body = JSON.stringify(body);
+    var lastErr;
+    for (var attempt = 0; attempt <= retries; attempt++) {
+      try {
+        var resp = await fetchWithTimeout(BASE_URL + path, opts);
+        var data = await resp.json();
+        if (!resp.ok) {
+          if (resp.status === 401) { setToken(null); }
+          throw new Error(data.error || "请求失败");
+        }
+        _online = true;
+        return data;
+      } catch (err) {
+        lastErr = err;
+        _online = false;
+        if (err.name === "AbortError" && attempt < retries) { continue; }
+        if (attempt >= retries) break;
+      }
+    }
+    throw lastErr;
+  }
+
+  function get(path, retries) { return request("GET", path, null, retries); }
+  function post(path, body, retries) { return request("POST", path, body, retries); }
 
   // ============ 认证 ============
   async function login(username, password) {
@@ -105,12 +120,15 @@ const API = (function() {
 
   // ============ 连接检测 ============
   async function checkConnection() {
+    var savedTimeout = FETCH_TIMEOUT;
+    FETCH_TIMEOUT = 5000;
     try {
       await get("/jobs/stats/summary");
       _online = true;
     } catch (_) {
       _online = false;
     }
+    FETCH_TIMEOUT = savedTimeout;
     return _online;
   }
 

@@ -10,6 +10,8 @@ var state = {
 var $ = function(s) { return document.querySelector(s); };
 var $$ = function(s) { return document.querySelectorAll(s); };
 var escapeHtml = (function() { var map = {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}; return function(s) { if (typeof s !== "string") return s; return s.replace(/[&<>"']/g, function(m) { return map[m]; }); }; })();
+var sanitizeUrl = function(u) { if (typeof u !== "string" || !u) return "#"; if (/^(https?:|mailto:|tel:|\/)/i.test(u)) return u; return "#"; };
+window.safeStorage = (function() { try { var t="_t"; localStorage.setItem(t,"1"); localStorage.removeItem(t); } catch(e) { return { available:false, get:function(k,d){return d;}, set:function(){return false;}, remove:function(){} }; } return { available:true, get:function(k,d){try{var v=localStorage.getItem(k);return v!==null?v:d;}catch(e){return d;}}, set:function(k,v){try{localStorage.setItem(k,v);return true;}catch(e){return false;}}, remove:function(k){try{localStorage.removeItem(k);}catch(e){}} }; })();
 
 function formatDate(d) { var dt = new Date(d); return dt.toLocaleDateString("zh-CN",{year:"numeric",month:"2-digit",day:"2-digit"}); }
 function daysUntil(d) { var t = new Date(d), n = new Date(); n.setHours(0,0,0,0); t.setHours(0,0,0,0); return Math.ceil((t-n)/86400000); }
@@ -62,8 +64,8 @@ function renderJobTable() {
     h+='<td class="col-status"><span class="badge '+asBadge(job.appStatus)+'">'+asLabel(job.appStatus)+'</span></td>';
     h+='<td class="col-update"><span class="cell-text">'+formatDate(job.updateDate)+'</span></td>';
     h+='<td class="col-deadline"><span class="deadline-countdown '+dc+'"><i data-lucide="clock"></i>'+dt+'</span></td>';
-    h+='<td class="col-links"><a href="'+job.officialUrl+'" target="_blank" class="link-btn" title="官网">官网</a> <a href="'+job.applyUrl+'" target="_blank" class="link-btn primary-link" title="报名入口"><i data-lucide="send"></i>报名</a></td>';
-    h+='<td class="col-announce"><a href="'+job.officialUrl+'" target="_blank" class="link-btn" title="查看招聘公告"><i data-lucide="file-text"></i>公告</a></td>';
+    h+='<td class="col-links"><a href="'+sanitizeUrl(job.officialUrl)+'" target="_blank" class="link-btn" title="官网">官网</a> <a href="'+sanitizeUrl(job.applyUrl)+'" target="_blank" class="link-btn primary-link" title="报名入口"><i data-lucide="send"></i>报名</a></td>';
+    h+='<td class="col-announce"><a href="'+sanitizeUrl(job.officialUrl)+'" target="_blank" class="link-btn" title="查看招聘公告"><i data-lucide="file-text"></i>公告</a></td>';
     h+='<td class="col-exam"><span class="cell-text">'+escapeHtml(job.examInfo||'--')+'</span></td><td class="col-size"><span class="cell-text">'+escapeHtml(job.companySize||'--')+'</span></td><td class="col-notes">';
     if(job.welfare&&job.welfare.length){ var wl=Array.isArray(job.welfare)?job.welfare:job.welfare.split(",").map(function(x){return x.trim().replace(/^["']+|["']+$/g,"");}); h+='<div class="welfare-tags">'; wl.slice(0,3).forEach(function(w){h+='<span class="welfare-tag">'+escapeHtml(w)+'</span>';}); h+='</div>'; }
     if(job.notes)h+='<div class="cell-text" style="font-size:11px;color:var(--gray-500);margin-top:2px">'+escapeHtml(job.notes||'')+'</div>';
@@ -89,7 +91,7 @@ function renderJobCards() {
     if(job.welfare&&job.welfare.length){ var wl=Array.isArray(job.welfare)?job.welfare:job.welfare.split(",").map(function(x){return x.trim().replace(/^["']+|["']+$/g,"");}); h+='<div class="welfare-tags" style="margin-top:10px">'; wl.forEach(function(w){h+='<span class="welfare-tag">'+escapeHtml(w)+'</span>';}); h+='</div>'; }
     h+='<div class="job-card-footer">';
     h+='<span class="deadline-countdown '+dc+'"><i data-lucide="clock"></i>'+dt+'</span>';
-    h+='<div style="display:flex;gap:6px"><a href="'+job.applyUrl+'" target="_blank" class="link-btn primary-link">报名</a></div>';
+    h+='<div style="display:flex;gap:6px"><a href="'+sanitizeUrl(job.applyUrl)+'" target="_blank" class="link-btn primary-link">报名</a></div>';
     h+='</div></div>';
   });
   h+="</div>"; h+=renderPagination(total,totalPages,state.jobPage); w.innerHTML=h; if(typeof lucide!=="undefined")lucide.createIcons();
@@ -106,7 +108,7 @@ function renderCampusPage() {
     h+='<div class="cc-degree">🎓 '+job.graduateYear+" · "+job.degree+'</div>';
     h+='<div class="cc-tags"><span class="cc-badge">'+rtLabel(job.recruitType)+'</span><span class="cc-badge">'+locLabel(job.location)+'</span><span class="cc-badge">'+tgLabel(job.target)+'</span></div>';
     h+='<div class="cc-deadline"><i data-lucide="clock"></i><span class="'+dc+'" style="font-weight:600">'+dlText(ds)+'</span></div>';
-    h+='<div style="display:flex;gap:6px;margin-top:12px"><a href="'+job.applyUrl+'" target="_blank" class="link-btn primary-link">立即报名</a><a href="'+job.officialUrl+'" target="_blank" class="link-btn">官网</a></div>';
+    h+='<div style="display:flex;gap:6px;margin-top:12px"><a href="'+sanitizeUrl(job.applyUrl)+'" target="_blank" class="link-btn primary-link">立即报名</a><a href="'+sanitizeUrl(job.officialUrl)+'" target="_blank" class="link-btn">官网</a></div>';
     h+="</div>";
   });
   g.innerHTML=h; if(typeof lucide!=="undefined")lucide.createIcons();
@@ -392,7 +394,7 @@ function init() {
         h+='<div class="cc-degree">🎓 '+job.graduateYear+" · "+job.degree+'</div>';
         h+='<div class="cc-tags"><span class="cc-badge">'+rtLabel(job.recruitType)+'</span><span class="cc-badge">'+locLabel(job.location)+'</span><span class="cc-badge">'+tgLabel(job.target)+'</span></div>';
         h+='<div class="cc-deadline"><i data-lucide="clock"></i><span class="'+dc+'" style="font-weight:600">'+dlText(ds)+'</span></div>';
-        h+='<div style="display:flex;gap:6px;margin-top:12px"><a href="'+job.applyUrl+'" target="_blank" class="link-btn primary-link">立即报名</a><a href="'+job.officialUrl+'" target="_blank" class="link-btn">官网</a></div></div>';
+        h+='<div style="display:flex;gap:6px;margin-top:12px"><a href="'+sanitizeUrl(job.applyUrl)+'" target="_blank" class="link-btn primary-link">立即报名</a><a href="'+sanitizeUrl(job.officialUrl)+'" target="_blank" class="link-btn">官网</a></div></div>';
       });
       g.innerHTML = h;
       if(typeof lucide!=="undefined") lucide.createIcons();
@@ -612,17 +614,6 @@ window.addEventListener("beforeunload", function() {
   for (var i = 0; i <= highestId; i++) { clearTimeout(i); clearInterval(i); }
 });
 
-// ===== localStorage Integrity Check =====
-(function() {
-  try {
-    var testKey = "_soe_integrity_test";
-    localStorage.setItem(testKey, "1");
-    localStorage.removeItem(testKey);
-  } catch(e) {
-    console.warn("localStorage不可用，部分功能将受限");
-    window._storageAvailable = false;
-  }
-})();
 })();
 
 

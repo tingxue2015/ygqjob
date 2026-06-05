@@ -1,5 +1,6 @@
 // ===== 央国企招聘平台 - 认证模块 =====
 (function(){
+var ss = window.safeStorage || { get:function(k,d){return localStorage.getItem(k)||d;}, set:function(k,v){try{localStorage.setItem(k,v);return true;}catch(e){return false;}}, remove:function(k){try{localStorage.removeItem(k);}catch(e){}} };
 "use strict";
 
 // ===== Auth State =====
@@ -19,13 +20,13 @@ async function loadUser() {
       } catch(e) { API.logout(); }
     }
     // 降级：本地存储恢复
-    var saved = localStorage.getItem("soe_user");
+    var saved = ss.get("soe_user");
     if (saved) { currentUser = JSON.parse(saved); }
-    var remember = localStorage.getItem("soe_remember");
+    var remember = ss.get("soe_remember");
     if (remember === "true" && !currentUser) {
-      var remAcc = localStorage.getItem("soe_remembered_account");
+      var remAcc = ss.get("soe_remembered_account");
       if (remAcc) {
-        var users = JSON.parse(localStorage.getItem("soe_users") || "{}");
+        var users = JSON.parse(ss.get("soe_users") || "{}");
         currentUser = users[remAcc] || null;
       }
     }
@@ -34,9 +35,9 @@ async function loadUser() {
 
 function saveUser() {
   if (currentUser) {
-    localStorage.setItem("soe_user", JSON.stringify(currentUser));
+    ss.set("soe_user", JSON.stringify(currentUser));
   } else {
-    localStorage.removeItem("soe_user");
+    ss.remove("soe_user");
   }
 }
 
@@ -193,8 +194,8 @@ async function handleLogin() {
 
   if (apiOk) {
     saveUser();
-    if (remember) { localStorage.setItem("soe_remember", "true"); localStorage.setItem("soe_remembered_account", account); }
-    else { localStorage.removeItem("soe_remember"); localStorage.removeItem("soe_remembered_account"); }
+    if (remember) { ss.set("soe_remember", "true"); ss.set("soe_remembered_account", account); }
+    else { ss.remove("soe_remember"); ss.remove("soe_remembered_account"); }
     closeAllModals(); updateAuthUI();
     window.showToast("登录成功！", "success"); return;
   }
@@ -202,7 +203,7 @@ async function handleLogin() {
   // 降级：本地存储登录
   // Check users storage
   var users = {};
-  try { users = JSON.parse(localStorage.getItem("soe_users") || "{}"); } catch(e) {}
+  try { users = JSON.parse(ss.get("soe_users") || "{}"); } catch(e) {}
   var hashedInput = await hashPassword(password);
   if (!hashedInput) { showFieldError("loginPassword", "系统错误，请稍后再试"); return; }
   var foundKey = null;
@@ -212,15 +213,15 @@ async function handleLogin() {
     if (u.account === account || u.phone === account) {
       if ((u.passwordHash && u.passwordHash === hashedInput) || (!u.passwordHash && u.password === password)) {
         foundKey = key; foundUser = u;
-        if (!u.passwordHash) { u.passwordHash = hashedInput; u.password = null; try { localStorage.setItem("soe_users", JSON.stringify(users)); } catch(e) {} }
+        if (!u.passwordHash) { u.passwordHash = hashedInput; u.password = null; try { ss.set("soe_users", JSON.stringify(users)); } catch(e) {} }
       }
     }
   });
   if (!foundUser) { showFieldError("loginPassword", "账号或密码错误"); return; }
   currentUser = { account: foundUser.account, phone: foundUser.phone };
   saveUser();
-  if (remember) { localStorage.setItem("soe_remember", "true"); localStorage.setItem("soe_remembered_account", foundKey); }
-  else { localStorage.removeItem("soe_remember"); localStorage.removeItem("soe_remembered_account"); }
+  if (remember) { ss.set("soe_remember", "true"); ss.set("soe_remembered_account", foundKey); }
+  else { ss.remove("soe_remember"); ss.remove("soe_remembered_account"); }
   closeAllModals(); updateAuthUI();
   window.showToast("登录成功，欢迎回来！", "success");
 }
@@ -260,7 +261,7 @@ async function handleRegister() {
   if (!apiOk) {
   // Check if user already exists
   var users = {};
-  try { users = JSON.parse(localStorage.getItem("soe_users") || "{}"); } catch(e) {}
+  try { users = JSON.parse(ss.get("soe_users") || "{}"); } catch(e) {}
   var existsKey = null;
   Object.keys(users).forEach(function(key){
     var u = users[key];
@@ -279,7 +280,7 @@ async function handleRegister() {
   // Save user with hashed password
   var userKey = account;
   users[userKey] = { account: account, phone: phone, passwordHash: hashedPw, password: null, registeredAt: new Date().toISOString() };
-  try { localStorage.setItem("soe_users", JSON.stringify(users)); } 
+  try { ss.set("soe_users", JSON.stringify(users)); } 
   catch(e) { 
     if (e.name === "QuotaExceededError") { showFieldError("regPhone", "浏览器存储空间不足"); return; }
     throw e;
@@ -289,8 +290,8 @@ async function handleRegister() {
   // Auto login
   currentUser = { account: account, phone: phone };
   saveUser();
-  localStorage.removeItem("soe_remember");
-  localStorage.removeItem("soe_remembered_account");
+  ss.remove("soe_remember");
+  ss.remove("soe_remembered_account");
   currentSmsCode = null;
 
   closeAllModals();
@@ -303,8 +304,8 @@ function handleLogout() {
   if (typeof API !== "undefined" && API.logout) { API.logout(); }
   currentUser = null;
   saveUser();
-  localStorage.removeItem("soe_remember");
-  localStorage.removeItem("soe_remembered_account");
+  ss.remove("soe_remember");
+  ss.remove("soe_remembered_account");
   document.getElementById("userDropdown").classList.remove("show");
   updateAuthUI();
   window.showToast("已退出登录", "");
