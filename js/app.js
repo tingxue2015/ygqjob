@@ -487,6 +487,7 @@ function init() {
     console.error("数据初始化失败:", e.message, e.stack);
     var tw = document.getElementById("jobTableWrap");
     if (tw) tw.innerHTML = "<div style=\"padding:40px;text-align:center;color:#b91c1c\"><h3>⚠ 数据加载失败</h3><p>" + e.message + "</p><p>请检查浏览器控制台(F12)了解更多信息</p></div>";
+    if (window._hideLoader) window._hideLoader();
     return;
   }
   // ---- 刷新按钮 ----
@@ -535,7 +536,8 @@ function init() {
   updateLiveIndicator();
   updateNewBadge();
 
-  // Initial render
+  // Hide loader and render
+  if (window._hideLoader) window._hideLoader();
   renderJobTable();
 }
 
@@ -583,6 +585,22 @@ function updateNewBadge() {
     badge.classList.remove("pulse");
   }
 }
+
+// ===== Loader management =====
+(function(){
+  var loader = document.getElementById("page-loader");
+  var timeoutMsg = document.getElementById("loader-timeout-msg");
+  if (loader) {
+    setTimeout(function(){
+      if (loader.style.display !== "none" && timeoutMsg) {
+        timeoutMsg.style.display = "block";
+      }
+    }, 12000);
+    window._hideLoader = function() {
+      if (loader) { loader.style.display = "none"; }
+    };
+  }
+})();
 
 // ===== Start =====
 if(document.readyState===
