@@ -1,4 +1,4 @@
-﻿// ===== Mock Data: 央国企招聘信息（1731条岗位记录，1202家央国企）=====
+// ===== Mock Data: 央国企招聘信息（1731条岗位记录，1202家央国企）=====
 // 生成日期: 2026-06-03 | 涵盖243家央企+665家省属国企(已扩展至县级国企) | 当前已录入1202家
 const mockJobs = [
   {id:1,company:'中国航天科技集团有限公司',logo:'航天',companyType:'central',industry:'航空航天',recruitType:'autumn',target:'master',location:'beijing',job:'飞行器总体设计工程师',appStatus:'none',updateDate:'2026-06-03',deadline:'2026-06-30',officialUrl:'https://www.spacechina.com',applyUrl:'https://www.spacetalent.com.cn',announcement:'中国航天科技集团2026届校园招聘公告',examInfo:'专业笔试（航天器设计原理）+技术面试+综合面试+政审',companySize:'170000+人',welfare:['北京落户','事业编制','安家费','人才公寓','子女教育'],notes:'航空航天/力学/控制工程硕士及以上，党员优先',regulator:'国资委',fortune:'世界500强',graduateYear:'2026届',degree:'硕士及以上',verified:true},
