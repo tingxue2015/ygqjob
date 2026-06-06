@@ -5,7 +5,7 @@ var state = {
   currentPage: "home",
   currentView: "table",
   filters: { companyType:"all", recruitType:"all", target:"all", location:"all", deadline:"all", appStatus:"all" },
-  searchQuery: "", jobPage: 1, pageSize: 20
+  searchQuery: "", jobPage: 1, pageSize: 20, aiActive: false
 };
 var $ = function(s) { return document.querySelector(s); };
 var $$ = function(s) { return document.querySelectorAll(s); };
@@ -25,6 +25,104 @@ function asLabel(s) { var m={none:"未投递",applied:"已投递",no_response:"�
 function asBadge(s) { var m={none:"badge-gray",applied:"badge-blue",no_response:"badge-yellow",test:"badge-blue",interview:"badge-yellow",offer:"badge-green",done:"badge-gray"}; return m[s]||"badge-gray"; }
 function showToast(msg,type) { var c=$("#toastContainer"); if(!c)return; while(c.children.length>=3){c.firstChild.remove();} var t=document.createElement("div"); t.className="toast "+(type||""); t.textContent=msg; c.appendChild(t); setTimeout(function(){t.remove();},3000); }
 function debounce(fn,delay){var timer=null;return function(){var ctx=this,args=arguments;clearTimeout(timer);timer=setTimeout(function(){fn.apply(ctx,args);},delay);};}
+// ===== AI-Powered Semantic Search =====
+function performAISearch(query) {
+  console.log("[AI-Search] performAISearch called, query:", query);
+  if (!query || !query.trim()) { console.log("[AI-Search] empty query, returning"); return; }
+  var trimmed = query.trim();
+  state.aiActive = false;
+  updateAIIndicator("loading");
+
+  var apiKey = "sk-72158da52cba4ababb36490d74bdcd67";
+  var systemPrompt = "You are a query parser for a Chinese state-owned enterprise job board. Parse natural language Chinese queries into structured filters. Output ONLY JSON, no other text. Fields: companyType (central/local/mixed/null), recruitType (spring/autumn/makeup/intern/senior/null), target (bachelor/master/phd/overseas/social/null), location (beijing/shanghai/guangzhou/shenzhen/chengdu/wuhan/other/null), keywords (array of 1-5 core search terms), company (specific company name if mentioned, else null).";
+
+  fetch("https://api.deepseek.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + apiKey
+    },
+    body: JSON.stringify({
+      model: "deepseek-chat",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: trimmed }
+      ],
+      temperature: 0,
+      max_tokens: 300
+    })
+  })
+  .then(function(r) {
+    console.log("[AI-Search] DeepSeek HTTP status:", r.status);
+    if (!r.ok) throw new Error("API error " + r.status);
+    return r.json();
+  })
+  .then(function(data) {
+    console.log("[AI-Search] DeepSeek response:", JSON.stringify(data).substring(0, 300));
+    var respContent = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || "";
+    var jsonMatch = respContent.match(/\{[\s\S]*\}/);
+    var parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
+    console.log("[AI-Search] parsed filters:", JSON.stringify(parsed));
+    var validValues = {
+      companyType: ["central","local","mixed"],
+      recruitType: ["spring","autumn","makeup","intern","senior"],
+      target: ["bachelor","master","phd","overseas","social"],
+      location: ["beijing","shanghai","guangzhou","shenzhen","chengdu","wuhan","other"]
+    };
+    var filterKeys = Object.keys(validValues);
+    filterKeys.forEach(function(key) {
+      if (parsed[key] && validValues[key].indexOf(parsed[key]) !== -1) {
+        state.filters[key] = parsed[key];
+        updateFilterChipUI(key, parsed[key]);
+      }
+    });
+    state.aiActive = true;
+    if (Array.isArray(parsed.keywords) && parsed.keywords.length > 0) {
+      state.searchQuery = parsed.keywords.join(" ");
+    }
+    if (typeof parsed.company === "string" && parsed.company.trim()) {
+      state.searchQuery = parsed.company.trim() + " " + state.searchQuery;
+    }
+  })
+  .catch(function(err) {
+    console.error("[AI-Search] API error:", err);
+    state.searchQuery = trimmed;
+  })
+  .then(function() {
+    console.log("[AI-Search] finalizing, aiActive:", state.aiActive, "searchQuery:", state.searchQuery);
+    updateAIIndicator(state.aiActive ? "active" : "idle");
+    state.jobPage = 1;
+    if (state.currentView === "table") renderJobTable();
+    else renderJobCards();
+  });
+}
+
+function updateAIIndicator(status) {
+  var el = document.getElementById("aiSearchIndicator");
+  if (!el) { console.log("[AI-Search] aiSearchIndicator element not found"); return; }
+  el.className = "ai-indicator";
+  if (status === "loading") {
+    el.className = "ai-indicator loading";
+    el.innerHTML = '<span class="ai-spinner"></span><span>AI \u89e3\u6790\u4e2d...</span>';
+    el.style.display = "flex";
+  } else if (status === "active") {
+    el.className = "ai-indicator active";
+    el.innerHTML = '<i data-lucide="sparkles" class="ai-sparkle"></i><span>AI \u641c\u7d22</span>';
+    el.style.display = "flex";
+    if (typeof lucide !== "undefined") lucide.createIcons();
+  } else {
+    el.style.display = "none";
+  }
+}
+
+function updateFilterChipUI(filterName, value) {
+  var group = document.querySelector('.filter-chips[data-filter="' + filterName + '"]');
+  if (!group) return;
+  group.querySelectorAll(".chip").forEach(function(chip) {
+    chip.classList.toggle("active", chip.dataset.value === value);
+  });
+}
+
 function matchFilters(job) {
   var f=state.filters;
   if(state.searchQuery){ var q=state.searchQuery.toLowerCase(); var mt=(job.company+job.job+job.industry+job.notes).toLowerCase(); if(mt.indexOf(q)===-1)return false; }
@@ -314,6 +412,8 @@ function init() {
     resetBtn.addEventListener("click",function(){
       state.filters = { companyType:"all", recruitType:"all", target:"all", location:"all", deadline:"all", appStatus:"all" }; state.jobPage = 1;
       state.searchQuery = "";
+      state.aiActive = false;
+      updateAIIndicator("idle");
       $("#mainSearch").value = "";
       $$(".filter-chips").forEach(function(group){
         group.querySelectorAll(".chip").forEach(function(chip,idx){
@@ -357,6 +457,17 @@ function init() {
         });
       });
     },300));
+    // Enter key triggers AI semantic search
+    searchInput.addEventListener("keydown",function(e){
+      if(e.key === "Enter"){
+        console.log("[AI-Search] Enter key pressed in search input");
+        e.preventDefault();
+        var dd = $("#searchDropdown");
+        if(dd) dd.classList.remove("show");
+        performAISearch(this.value);
+      }
+    });
+
     searchInput.addEventListener("blur",function(){
       setTimeout(function(){ $("#searchDropdown").classList.remove("show"); }, 200);
     });

@@ -158,6 +158,35 @@ img{max-width:100%}
 }
 .tag:hover{background:rgba(255,255,255,0.25)}
 
+/* ===== AI Search Indicator ===== */
+.ai-indicator{
+  display:none; align-items:center; gap:6px;
+  padding:4px 10px; border-radius:20px;
+  font-size:12px; font-weight:500;
+  transition:all var(--transition);
+  white-space:nowrap; flex-shrink:0;
+}
+.ai-indicator.loading{
+  display:flex;
+  background:var(--primary-bg); color:var(--primary-light);
+}
+.ai-indicator.active{
+  display:flex;
+  background:linear-gradient(135deg, #EEF2FF, #E0E7FF);
+  color:var(--primary);
+  border:1px solid #C7D2FE;
+}
+.ai-spinner{
+  width:12px; height:12px;
+  border:2px solid var(--primary-bg);
+  border-top-color:var(--primary);
+  border-radius:50%;
+  animation:ai-spin 0.7s linear infinite;
+}
+@keyframes ai-spin{ to{transform:rotate(360deg)} }
+.ai-sparkle{ width:14px; height:14px; color:var(--primary) }
+
+
 /* ===== Filter Bar ===== */
 .filter-bar{padding:20px 40px;background:var(--white);border-bottom:1px solid var(--gray-200)}
 .filter-row{display:flex;gap:32px;margin-bottom:12px;flex-wrap:wrap}
