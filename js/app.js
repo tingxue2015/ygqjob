@@ -34,7 +34,34 @@ function performAISearch(query) {
   updateAIIndicator("loading");
 
   var apiKey = "sk-72158da52cba4ababb36490d74bdcd67";
-  var systemPrompt = "You are a query parser for a Chinese state-owned enterprise job board. Parse natural language Chinese queries into structured filters. Output ONLY JSON, no other text. Fields: companyType (central/local/mixed/null), recruitType (spring/autumn/makeup/intern/senior/null), target (bachelor/master/phd/overseas/social/null), location (beijing/shanghai/guangzhou/shenzhen/chengdu/wuhan/other/null), keywords (array of 1-5 core search terms), company (specific company name if mentioned, else null).";
+  var systemPrompt = [
+    "??????????????????????????????????????",
+    "",
+    "## ????(???JSON):",
+    "- companyType: ???? central(??)/local(????)/mixed(?????)/null",
+    "- recruitType: ???? spring(??)/autumn(??)/makeup(??)/intern(??)/senior(????)/null",
+    "- target: ???? bachelor(??)/master(??)/phd(??)/overseas(??)/social(??)/null",
+    "- location: ???? beijing/shanghai/guangzhou/shenzhen/chengdu/wuhan/other/null",
+    "- keywords: ???????(1-5????),?[\"????\",\"??\"]",
+    "- company: ?????(?????????)/null",
+    "- industry: ???? ??/??/??/??/??/???/null",
+    "- salaryMin: ??????(??,???)/null",
+    "- excludeLocation: ???????/null",
+    "- summary: ????????????????",
+    "",
+    "## ??:",
+    "1. ???(??/??/???/??) -> ?excludeLocation",
+    "2. ????? -> target=master, ???? -> target=bachelor",
+    "3. ????XX????? -> ??salaryMin",
+    "4. ??????(????/???/???) -> ?company",
+    "5. ??/???? -> recruitType, ?? -> intern",
+    "6. ?????????,???????",
+    "",
+    "## ????:",
+    '{"companyType":"central","target":"master","location":"beijing","keywords":["???","??","??"],"summary":"?????????????????"}',
+    '{"location":"shanghai","industry":"??","salaryMin":30,"keywords":["??","??"],"summary":"??????????(30?+)"}',
+    '{"company":"????","keywords":["????","??"],"summary":"???????????"}'
+].join("\n");
 
   fetch("https://api.deepseek.com/v1/chat/completions", {
     method: "POST",
@@ -83,6 +110,16 @@ function performAISearch(query) {
     if (typeof parsed.company === "string" && parsed.company.trim()) {
       state.searchQuery = parsed.company.trim() + " " + state.searchQuery;
     }
+    if (typeof parsed.summary === "string" && parsed.summary.trim()) {
+      showToast("AI: " + parsed.summary, "ai-summary");
+    } else {
+      var parts = [];
+      if (parsed.companyType) parts.push(ctLabel(parsed.companyType));
+      if (parsed.target) parts.push(tgLabel(parsed.target));
+      if (parsed.location) parts.push(locLabel(parsed.location));
+      if (parsed.recruitType) parts.push(rtLabel(parsed.recruitType));
+      if (parts.length) showToast("AI???: " + parts.join(" | "), "ai-summary");
+    }
   })
   .catch(function(err) {
     console.error("[AI-Search] API error:", err);
@@ -125,7 +162,27 @@ function updateFilterChipUI(filterName, value) {
 
 function matchFilters(job) {
   var f=state.filters;
-  if(state.searchQuery){ var q=state.searchQuery.toLowerCase(); var mt=(job.company+job.job+job.industry+job.notes).toLowerCase(); if(mt.indexOf(q)===-1)return false; }
+  if(state.searchQuery){
+    var text = (job.company + " " + job.job + " " + (job.industry||"") + " " + (job.notes||"") + " " + (job.location||"")).toLowerCase();
+    var kws = state.searchQuery.toLowerCase().split(/\s+/);
+    for (var i = 0; i < kws.length; i++) {
+      if (kws[i].length === 0) continue;
+      if (text.indexOf(kws[i]) === -1) {
+        if (kws[i] === "??" && job.companyType === "central") continue;
+        if (kws[i] === "??" && (job.companyType === "central" || job.companyType === "local")) continue;
+        if (kws[i] === "??" && job.location === "beijing") continue;
+        if (kws[i] === "??" && job.location === "shanghai") continue;
+        if (kws[i] === "??" && job.location === "guangzhou") continue;
+        if (kws[i] === "??" && job.location === "shenzhen") continue;
+        if (kws[i] === "??" && job.location === "chengdu") continue;
+        if (kws[i] === "??" && job.location === "wuhan") continue;
+        if (kws[i] === "??" && job.target === "master") continue;
+        if (kws[i] === "??" && job.target === "bachelor") continue;
+        if (kws[i] === "??" && job.target === "phd") continue;
+        return false;
+      }
+    }
+  }
   if(f.companyType!=="all"&&job.companyType!==f.companyType)return false;
   if(f.recruitType!=="all"&&job.recruitType!==f.recruitType)return false;
   if(f.target!=="all"&&job.target!==f.target)return false;
