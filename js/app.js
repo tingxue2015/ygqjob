@@ -473,14 +473,25 @@ function init() {
     });
   }
 
+  // Search button triggers AI semantic search
+  var searchBtn = document.querySelector(".search-btn");
+  if(searchBtn){
+    searchBtn.addEventListener("click",function(e){
+      console.log("[AI-Search] Search button clicked");
+      e.preventDefault();
+      var input = $("#mainSearch");
+      if(input) performAISearch(input.value);
+    });
+  }
+
   // Hot tags
   $$(".hot-tags .tag").forEach(function(tag){
     tag.addEventListener("click",function(){
-      searchInput.value = this.textContent.trim();
-      state.searchQuery = this.textContent.trim(); state.jobPage = 1;
-      if(state.currentView==="table") renderJobTable();
-      else renderJobCards();
+      var val = this.textContent.trim();
+      console.log("[AI-Search] Hot tag clicked:", val);
+      searchInput.value = val;
       searchInput.scrollIntoView({behavior:"smooth"});
+      performAISearch(val);
     });
   });
 
@@ -646,6 +657,15 @@ function init() {
   updateLiveStats();
   updateLiveIndicator();
   updateNewBadge();
+
+  // AI Search version marker
+  console.log("[AI-Search] App initialized - AI search version: 2026-06-07-v3");
+  var versionMarker = document.createElement("div");
+  versionMarker.id = "ai-version-marker";
+  versionMarker.style.cssText = "position:fixed;bottom:4px;right:4px;background:#10b981;color:#fff;padding:2px 8px;border-radius:4px;font-size:10px;z-index:99999;font-family:monospace";
+  versionMarker.textContent = "AI Search v3";
+  document.body.appendChild(versionMarker);
+  setTimeout(function(){ versionMarker.style.opacity = "0"; versionMarker.style.transition = "opacity 1s"; setTimeout(function(){ if(versionMarker.parentNode) versionMarker.remove(); }, 1500); }, 3000);
 
   // Hide loader and render
   if (window._hideLoader) window._hideLoader();
