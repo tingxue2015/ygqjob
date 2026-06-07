@@ -5,7 +5,8 @@ var state = {
   currentPage: "home",
   currentView: "table",
   filters: { companyType:"all", recruitType:"all", target:"all", location:"all", deadline:"all", appStatus:"all" },
-  searchQuery: "", jobPage: 1, pageSize: 20, aiActive: false
+  searchQuery: "", jobPage: 1, pageSize: 20, aiActive: false,
+  userProfile: null
 };
 var $ = function(s) { return document.querySelector(s); };
 var $$ = function(s) { return document.querySelectorAll(s); };
@@ -205,6 +206,225 @@ function renderPagination(total,totalPages,cur){
   var jump='<div class="pagination-jump"><span>跳至</span><input type="number" class="page-jump-input" min="1" max="'+totalPages+'" value="'+cur+'" data-jump="true"><span>页</span><button class="btn btn-sm btn-primary page-jump-btn" data-jump-page="'+cur+'">GO</button></div>';
   return h+jump;
 }
+
+// ===== AI Job Matching Engine =====
+var SCHOOL_985_LIST = ["??","??","??","??","??","??","???","???","??","??","??","??","??","??","????","??","??","??","??","??","????","??","??","??","??","????","??","??","??","???","??","????","???"];
+var SCHOOL_211_LIST = ["??","??","??","??","??","??","??","??","????","??","??","??","??","??","??","??","??","??","??","??","??","??","???","??","??","??","????","????","????","??","??","????","????","????","??","??","??","???"];
+var SCHOOL_C9_LIST = ["??","??","??","??","??","??","???","???","??"];
+function getSchoolTier(schoolName) {
+  if (!schoolName) return "other";
+  for (var i = 0; i < SCHOOL_C9_LIST.length; i++) { if (schoolName.indexOf(SCHOOL_C9_LIST[i]) !== -1) return "c9"; }
+  for (var i = 0; i < SCHOOL_985_LIST.length; i++) { if (schoolName.indexOf(SCHOOL_985_LIST[i]) !== -1) return "985"; }
+  for (var i = 0; i < SCHOOL_211_LIST.length; i++) { if (schoolName.indexOf(SCHOOL_211_LIST[i]) !== -1) return "211"; }
+  return "other";
+}
+function parseWallEduPattern(eduStr) {
+  if (!eduStr) return "any";
+  var s = eduStr.toLowerCase();
+  if (s.indexOf("??") !== -1 && s.indexOf("??") === -1 && s.indexOf("??") === -1) return "phd";
+  if (s.indexOf("??") !== -1) return "phd_preferred";
+  if (s.indexOf("??") !== -1 && s.indexOf("??") === -1) return "master";
+  if (s.indexOf("??") !== -1) return "master_preferred";
+  if (s.indexOf("??") !== -1) return "bachelor";
+  return "any";
+}
+function getWallDataForCompany(companyName) {
+  if (typeof DataService === "undefined") return [];
+  var walls = DataService.getWalls();
+  if (!walls || !walls.length) return [];
+  return walls.filter(function(w) { return w.company === companyName; });
+}
+function calculateMatchScore(job, profile) {
+  if (!profile) return null;
+  var score = 0;
+  var analysis = [];
+  var walls = getWallDataForCompany(job.company);
+  // 1. Target match (25 pts)
+  var eduOrder = { bachelor: 1, master: 2, phd: 3 };
+  var jobEdu = job.target;
+  var userEdu = profile.education;
+  if (jobEdu === userEdu) { score += 25; analysis.push({ text: "???????????????", ok: true }); }
+  else if (jobEdu === "social") { score += 18; analysis.push({ text: "??????????????????", ok: true }); }
+  else if (jobEdu === "overseas") { score += 10; analysis.push({ text: "??????????????????????", ok: false }); }
+  else if (eduOrder[jobEdu] && eduOrder[userEdu] && eduOrder[userEdu] >= eduOrder[jobEdu]) { score += 20; analysis.push({ text: "??????????????????", ok: true }); }
+  else { score += 8; analysis.push({ text: "????????????????", ok: false }); }
+  // 2. Wall education pattern match (25 pts)
+  if (walls.length > 0) {
+    var totalWallCount = 0, eduScore = 0;
+    walls.forEach(function(w) {
+      var cnt = parseInt(w.count) || 1;
+      totalWallCount += cnt;
+      var pattern = parseWallEduPattern(w.education);
+      if (pattern === userEdu) { eduScore += cnt * 25; }
+      else if (pattern === userEdu + "_preferred") { eduScore += cnt * 20; }
+      else if (pattern === "phd_preferred" && userEdu === "phd") { eduScore += cnt * 22; }
+      else if (pattern === "master_preferred" && userEdu === "master") { eduScore += cnt * 22; }
+      else if (pattern === "phd" && userEdu === "phd") { eduScore += cnt * 25; }
+      else if (pattern === "master" && userEdu === "master") { eduScore += cnt * 25; }
+      else if (pattern === "bachelor" && userEdu === "bachelor") { eduScore += cnt * 25; }
+      else if (pattern === "any") { eduScore += cnt * 15; }
+      else { eduScore += cnt * 5; }
+    });
+    var wallEduScore = totalWallCount > 0 ? Math.round(eduScore / totalWallCount) : 0;
+    score += wallEduScore;
+    if (wallEduScore >= 20) analysis.push({ text: "??????????????????????", ok: true });
+    else if (wallEduScore >= 10) analysis.push({ text: "?????????????????????????", ok: true });
+    else analysis.push({ text: "??????????????????????", ok: false });
+  } else {
+    score += 12;
+    analysis.push({ text: "????????????????????????", ok: true });
+  }
+  // 3. School match from wall data (20 pts)
+  if (walls.length > 0) {
+    var totalSchoolCount = 0, schoolScore = 0;
+    walls.forEach(function(w) {
+      var cnt = parseInt(w.count) || 1;
+      totalSchoolCount += cnt;
+      var schools = (w.school || "").split(/[\/,?]/);
+      var bestTier = "other";
+      schools.forEach(function(s) { var t = getSchoolTier(s.trim()); if (t === "c9" || (t === "985" && bestTier !== "c9") || (t === "211" && bestTier === "other")) bestTier = t; });
+      var tierOrder = { c9: 3, "985": 2, "211": 1, other: 0 };
+      var userTierVal = tierOrder[profile.school] || 0;
+      var wallTierVal = tierOrder[bestTier] || 0;
+      if (userTierVal >= wallTierVal) { schoolScore += cnt * 20; }
+      else if (userTierVal + 1 >= wallTierVal) { schoolScore += cnt * 12; }
+      else { schoolScore += cnt * 4; }
+    });
+    var wallSchoolScore = totalSchoolCount > 0 ? Math.round(schoolScore / totalSchoolCount) : 0;
+    score += wallSchoolScore;
+    if (wallSchoolScore >= 18) analysis.push({ text: "???????????????????????", ok: true });
+    else if (wallSchoolScore >= 10) analysis.push({ text: "????????????????????", ok: true });
+    else analysis.push({ text: "?????????????????????", ok: false });
+  } else {
+    score += 10;
+  }
+  // 4. Major match (20 pts)
+  if (profile.major && profile.major.trim()) {
+    var majorKws = profile.major.toLowerCase().split(/[\s,??]+/);
+    var jobText = (job.job + " " + (job.industry || "") + " " + (job.notes || "")).toLowerCase();
+    var matchCount = 0;
+    majorKws.forEach(function(kw) { if (kw && jobText.indexOf(kw) !== -1) matchCount++; });
+    var majorRatio = majorKws.length > 0 ? matchCount / majorKws.length : 0;
+    var majorScore = Math.round(majorRatio * 20);
+    score += majorScore;
+    if (majorRatio >= 0.5) analysis.push({ text: "???????????????", ok: true });
+    else if (majorRatio > 0) analysis.push({ text: "?????????????", ok: true });
+    else analysis.push({ text: "???????????????????????????", ok: false });
+  } else {
+    score += 10;
+    analysis.push({ text: "?????????????????", ok: true });
+  }
+  // 5. Company type bonus (10 pts)
+  if (job.companyType === "central") { score += 8; }
+  else if (job.companyType === "local") { score += 6; }
+  else { score += 4; }
+  score = Math.min(100, Math.max(0, Math.round(score)));
+  var level = score >= 75 ? "high" : (score >= 50 ? "mid" : "low");
+  return { score: score, level: level, analysis: analysis };
+}
+function loadUserProfile() {
+  try {
+    var raw = window.safeStorage.get("ygq_user_profile", null);
+    if (raw) { state.userProfile = JSON.parse(raw); return state.userProfile; }
+  } catch(e) { console.log("[Match] Failed to load user profile:", e); }
+  return null;
+}
+function saveUserProfile(profile) {
+  state.userProfile = profile;
+  window.safeStorage.set("ygq_user_profile", JSON.stringify(profile));
+}
+function clearUserProfile() {
+  state.userProfile = null;
+  window.safeStorage.remove("ygq_user_profile");
+}
+// ===== Match Page =====
+function renderMatchPage() {
+  var c = document.getElementById("matchContainer");
+  if (!c) return;
+  loadUserProfile();
+  var profile = state.userProfile;
+  var hasProfile = !!(profile && profile.education);
+  var h = '<div class="match-layout">';
+  // Left: Profile panel
+  h += '<div class="match-profile-panel">';
+  h += '<h3><i data-lucide="user-plus"></i>????</h3>';
+  if (hasProfile) {
+    h += '<div class="match-profile-saved"><i data-lucide="check-circle" style="width:16px;height:16px"></i>?????</div>';
+  }
+  h += '<div class="match-group"><label class="match-label">????</label><select class="match-select" id="matchEdu"><option value="">???</option><option value="bachelor"' + (hasProfile && profile.education === "bachelor" ? " selected" : "") + '>??</option><option value="master"' + (hasProfile && profile.education === "master" ? " selected" : "") + '>??</option><option value="phd"' + (hasProfile && profile.education === "phd" ? " selected" : "") + '>??</option></select></div>';
+  h += '<div class="match-group"><label class="match-label">????</label><select class="match-select" id="matchSchool"><option value="">???</option><option value="c9"' + (hasProfile && profile.school === "c9" ? " selected" : "") + '>C9??</option><option value="985"' + (hasProfile && profile.school === "985" ? " selected" : "") + '>985??</option><option value="211"' + (hasProfile && profile.school === "211" ? " selected" : "") + '>211??</option><option value="other"' + (hasProfile && profile.school === "other" ? " selected" : "") + '>????</option></select></div>';
+  h += '<div class="match-group"><label class="match-label">????</label><input type="text" class="match-input" id="matchMajor" placeholder="?????????????????" value="' + (hasProfile && profile.major ? escapeHtml(profile.major) : "") + '" maxlength="60"><div class="match-tip">??1-3?????????????</div></div>';
+  h += '<div class="match-btn-row">';
+  h += '<button class="btn btn-primary" id="btnMatchStart"><i data-lucide="sparkles"></i>????</button>';
+  if (hasProfile) h += '<button class="btn btn-ghost" id="btnMatchClear"><i data-lucide="trash-2"></i>????</button>';
+  h += '</div></div>';
+  // Right: Results
+  h += '<div class="match-results-panel" id="matchResults">';
+  h += '<h3><i data-lucide="target"></i>????</h3>';
+  if (hasProfile && profile._matchResults && profile._matchResults.length > 0) {
+    profile._matchResults.forEach(function(mr, idx) {
+      var job = mr.job;
+      var sc = mr.score;
+      var level = sc >= 75 ? "high" : (sc >= 50 ? "mid" : "low");
+      h += '<div class="match-result-card' + (idx === 0 ? ' top-match' : '') + '">';
+      h += '<div class="match-score-badge ' + level + '">' + sc + '%</div>';
+      h += '<div class="match-result-header"><div class="company-logo">' + (job.logo || job.company.charAt(0)) + '</div><div><div class="mr-company">' + escapeHtml(job.company) + '</div><div class="mr-job">' + escapeHtml(job.job) + '</div></div></div>';
+      h += '<div class="match-result-meta"><span>' + ctLabel(job.companyType) + '</span><span>' + rtLabel(job.recruitType) + '</span><span>' + tgLabel(job.target) + '</span><span>' + locLabel(job.location) + '</span></div>';
+      if (mr.analysis && mr.analysis.length > 0) {
+        h += '<div class="match-gap-analysis"><div class="gap-title">????</div>';
+        mr.analysis.forEach(function(a) {
+          h += '<div class="gap-item ' + (a.ok ? "match-yes" : "match-no") + '"><span class="gi-icon">' + (a.ok ? '\\u2705' : '\\u26A0') + '</span>' + a.text + '</div>';
+        });
+        h += '</div>';
+      }
+      h += '<div class="match-result-footer"><span style="font-size:12px;color:var(--gray-400)">????? #' + (idx + 1) + '</span><a href="' + sanitizeUrl(job.applyUrl) + '" target="_blank" class="link-btn primary-link">??</a></div>';
+      h += '</div>';
+    });
+  } else {
+    h += '<div class="match-empty"><i data-lucide="search"></i><p>???????????????</p><p style="font-size:12px;color:var(--gray-400)">AI????????????????????</p></div>';
+  }
+  h += '</div></div>';
+  c.innerHTML = h;
+  if (typeof lucide !== "undefined") lucide.createIcons();
+  // Bind events
+  setTimeout(function() {
+    var btnMatch = document.getElementById("btnMatchStart");
+    var btnClear = document.getElementById("btnMatchClear");
+    if (btnMatch) {
+      btnMatch.addEventListener("click", function() {
+        var edu = document.getElementById("matchEdu").value;
+        var school = document.getElementById("matchSchool").value;
+        var major = document.getElementById("matchMajor").value.trim();
+        if (!edu) { showToast("???????", "error"); return; }
+        if (!school) { showToast("???????", "error"); return; }
+        var profile = { education: edu, school: school, major: major };
+        saveUserProfile(profile);
+        // Compute match scores for all jobs
+        var allJobs = getJobsData();
+        var scored = [];
+        allJobs.forEach(function(job) {
+          var result = calculateMatchScore(job, profile);
+          if (result) scored.push({ job: job, score: result.score, analysis: result.analysis });
+        });
+        scored.sort(function(a, b) { return b.score - a.score; });
+        var top20 = scored.slice(0, 20);
+        profile._matchResults = top20;
+        saveUserProfile(profile);
+        showToast("??? " + allJobs.length + " ????????", "success");
+        renderMatchPage();
+      });
+    }
+    if (btnClear) {
+      btnClear.addEventListener("click", function() {
+        clearUserProfile();
+        showToast("?????");
+        renderMatchPage();
+        if (state.currentPage === "home") { if (state.currentView === "table") renderJobTable(); else renderJobCards(); }
+      });
+    }
+  }, 100);
+}
+
 function renderJobTable() {
   try { var filtered=getJobsData().filter(matchFilters); var total=filtered.length; var totalPages=Math.ceil(total/state.pageSize)||1; if(state.jobPage>totalPages)state.jobPage=totalPages; var paged=filtered.slice((state.jobPage-1)*state.pageSize, state.jobPage*state.pageSize); var w=$("#jobTableWrap"); var c=$("#resultCount"); if(c)c.innerHTML="共 <strong>"+total+"</strong> 条，第 <strong>"+state.jobPage+"</strong>/<strong>"+totalPages+"</strong> 页";
   var h='<div class="table-scroll"><table class="job-table"><thead><tr>';
@@ -224,6 +444,7 @@ function renderJobTable() {
     h+='<td class="col-exam"><span class="cell-text">'+escapeHtml(job.examInfo||'--')+'</span></td><td class="col-size"><span class="cell-text">'+escapeHtml(job.companySize||'--')+'</span></td><td class="col-notes">';
     if(job.welfare&&job.welfare.length){ var wl=Array.isArray(job.welfare)?job.welfare:job.welfare.split(",").map(function(x){return x.trim().replace(/^["']+|["']+$/g,"");}); h+='<div class="welfare-tags">'; wl.slice(0,3).forEach(function(w){h+='<span class="welfare-tag">'+escapeHtml(w)+'</span>';}); h+='</div>'; }
     if(job.notes)h+='<div class="cell-text" style="font-size:11px;color:var(--gray-500);margin-top:2px">'+escapeHtml(job.notes||'')+'</div>';
+    if (hasProfile) { var ms = calculateMatchScore(job, state.userProfile); if (ms) { var ml = ms.level; h += "<td class=\"col-match\"><span class=\"match-col-badge " + ml + "">" + ms.score + "%</span></td>"; } else { h += "<td class=\"col-match\"><span class=\"match-col-badge none\">--</span></td>"; } }
     h+="</td></tr>";
   });;
   h+="</tbody></table></div>"; h+=renderPagination(total,totalPages,state.jobPage); w.innerHTML=h; if(typeof lucide!=="undefined")lucide.createIcons();
@@ -244,6 +465,7 @@ function renderJobCards() {
     h+='<div><span class="field-label">投递进度</span><span class="field-value"><span class="badge '+asBadge(job.appStatus)+'">'+asLabel(job.appStatus)+'</span></span></div>';
     h+='</div>';
     if(job.welfare&&job.welfare.length){ var wl=Array.isArray(job.welfare)?job.welfare:job.welfare.split(",").map(function(x){return x.trim().replace(/^["']+|["']+$/g,"");}); h+='<div class="welfare-tags" style="margin-top:10px">'; wl.forEach(function(w){h+='<span class="welfare-tag">'+escapeHtml(w)+'</span>';}); h+='</div>'; }
+    var hasCP = !!(state.userProfile && state.userProfile.education); if (hasCP) { var cms = calculateMatchScore(job, state.userProfile); if (cms) { h += "<div class=\"match-indicator " + cms.level + "\"><i data-lucide=\"target\" style=\"width:14px;height:14px\"></i>????? " + cms.score + "%</div>"; } }
     h+='<div class="job-card-footer">';
     h+='<span class="deadline-countdown '+dc+'"><i data-lucide="clock"></i>'+dt+'</span>';
     h+='<div style="display:flex;gap:6px"><a href="'+sanitizeUrl(job.applyUrl)+'" target="_blank" class="link-btn primary-link">报名</a></div>';
@@ -374,6 +596,7 @@ function navigateTo(page) {
   else if(page==="wall") renderWallPage();
   else if(page==="reviews") renderReviewsPage();
   else if(page==="calculator") renderCalculatorPage();
+  else if(page==="match") renderMatchPage();
 
   // Scroll to top
   document.getElementById("mainContent").scrollTop = 0;
@@ -715,6 +938,8 @@ function init() {
   updateLiveIndicator();
   updateNewBadge();
 
+  // Load user profile for match display
+  loadUserProfile();
   // AI Search version marker
   console.log("[AI-Search] App initialized - AI search version: 2026-06-07-v3");
   var versionMarker = document.createElement("div");
