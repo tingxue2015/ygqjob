@@ -51,7 +51,7 @@ function getJobsData() {
 // ====================================================================
 function init() {
   var dataScript = document.createElement("script");
-  dataScript.src = "js/data.js?v=202606081551";
+  dataScript.src = "js/data.js?v=20260609";
   dataScript.onload = function() {
     _initCore();
   };
