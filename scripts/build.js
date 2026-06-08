@@ -7,7 +7,6 @@ const CSS_DIR = path.join(ROOT, "css", "modules");
 const OUTPUT_JS = path.join(ROOT, "js", "app.js");
 const OUTPUT_CSS = path.join(ROOT, "css", "style.css");
 
-// ===== JS Build =====
 const JS_MODULES = [
   "00-core.js",
   "10-search.js",
@@ -16,6 +15,33 @@ const JS_MODULES = [
   "40-pages.js",
   "50-entry.js",
 ];
+
+function cleanModule(content) {
+  // Remove leading JSDoc block comment
+  content = content.replace(/^\/\*\*[\s\S]*?\*\/\r?\n?/, "");
+  
+  // Remove leading section marker lines that are JUST markers (not inline with code)
+  let lines = content.split(/\r?\n/);
+  while (lines.length > 0) {
+    let first = lines[0];
+    // If the line is purely a marker: // ======== (no code after the markers)
+    if (/^\/\/\s*={5,}\s*$/.test(first.trim())) {
+      lines.shift();
+      continue;
+    }
+    // If the line starts with a section marker immediately followed by code
+    // e.g. "// ===== Section =====function foo() {"
+    // Strip just the marker prefix, keep the code
+    let m = first.match(/^\/\/\s*={3,}[^=\n]*={3,}\s*/);
+    if (m && m[0].length < 120) {
+      lines[0] = first.substring(m[0].length);
+      // Don't shift - just trimmed the prefix
+      break;
+    }
+    break;
+  }
+  return lines.join("\n").trim();
+}
 
 function buildJS() {
   console.log("[build] JS modules...");
@@ -27,34 +53,26 @@ function buildJS() {
       process.exit(1);
     }
     let content = fs.readFileSync(filepath, "utf-8");
-    // Strip file-level JSDoc comments and section markers (keep inner code)
-    // Remove leading /** ... */ block
-    content = content.replace(/^\/\*\*[\s\S]*?\*\/\s*/m, "");
-    // Remove leading // ===== section markers
-    content = content.replace(/^\/\/ =====.+?=====\s*/m, "");
-    parts.push(content.trim());
+    content = cleanModule(content);
+    parts.push(content);
     console.log(`  ${file}: ${content.length} chars`);
   }
 
-  const combined = parts.join("\n");
-  const output = `// ===== 央国企招聘平台 - 主应用逻辑 =====\n// 构建时间: ${new Date().toISOString()}\n// 模块: ${JS_MODULES.join(", ")}\n(function(){"use strict";\n${combined}\n})();\n`;
+  const combined = parts.join("\n\n");
+  const output = `// ===== YGQ - Built ${new Date().toISOString()} =====
+// Modules: ${JS_MODULES.join(", ")}
+(function(){"use strict";
+${combined}
+})();
+`;
 
-  // Write as UTF-8 with BOM (matching original behavior)
-  fs.writeFileSync(OUTPUT_JS, "\uFEFF" + output, "utf-8");
+  fs.writeFileSync(OUTPUT_JS, output, "utf-8");
   console.log(`[build] JS done: ${OUTPUT_JS} (${fs.statSync(OUTPUT_JS).size} bytes)`);
 }
 
-// ===== CSS Build =====
-const CSS_MODULES = [
-  "base.css",
-  "layout.css",
-  "components.css",
-  "match.css",
-  "pages.css",
-];
-
 function buildCSS() {
   console.log("[build] CSS modules...");
+  const CSS_MODULES = ["base.css", "layout.css", "components.css", "match.css", "pages.css"];
   let parts = [];
   for (const file of CSS_MODULES) {
     const filepath = path.join(CSS_DIR, file);
@@ -66,39 +84,15 @@ function buildCSS() {
     parts.push(`/* ===== ${file} ===== */\n${content.trim()}`);
     console.log(`  ${file}: ${content.length} chars`);
   }
-
-  if (parts.length === 0) {
-    console.log("[build] No CSS modules found, skipping CSS build");
-    return;
-  }
-
+  if (parts.length === 0) { console.log("[build] No CSS modules, skipping"); return; }
   const combined = parts.join("\n\n");
-  const output = `/* YGQ 央国企招聘平台 - 样式表 */\n/* 构建时间: ${new Date().toISOString()} */\n${combined}\n`;
-
-  fs.writeFileSync(OUTPUT_CSS, "\uFEFF" + output, "utf-8");
+  const output = `/* YGQ - Built ${new Date().toISOString()} */\n${combined}\n`;
+  fs.writeFileSync(OUTPUT_CSS, output, "utf-8");
   console.log(`[build] CSS done: ${OUTPUT_CSS} (${fs.statSync(OUTPUT_CSS).size} bytes)`);
 }
 
-// ===== Main =====
 console.log("=== YGQ Build Tool ===");
 console.log(`Root: ${ROOT}`);
 buildJS();
 buildCSS();
 console.log("=== Build complete ===");
-
-// Watch mode
-if (process.argv.includes("--watch")) {
-  console.log("[watch] Watching for changes...");
-  const watchDirs = [MODULES_DIR];
-  if (fs.existsSync(CSS_DIR)) watchDirs.push(CSS_DIR);
-  
-  watchDirs.forEach(dir => {
-    fs.watch(dir, { recursive: true }, (eventType, filename) => {
-      if (filename && (filename.endsWith(".js") || filename.endsWith(".css"))) {
-        console.log(`[watch] ${eventType}: ${filename}`);
-        buildJS();
-        if (filename.endsWith(".css")) buildCSS();
-      }
-    });
-  });
-}
