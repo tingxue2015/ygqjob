@@ -96,7 +96,8 @@ function renderMatchPage() {
 }
 function renderJobTable() {
 
-  try { var filtered=getJobsData().filter(matchFilters); var total=filtered.length; var totalPages=Math.ceil(total/state.pageSize)||1; if(state.jobPage>totalPages)state.jobPage=totalPages; var paged=filtered.slice((state.jobPage-1)*state.pageSize, state.jobPage*state.pageSize); var w=$("#jobTableWrap"); var c=$("#resultCount"); if(c)c.innerHTML="共 <strong>"+total+"</strong> 条，第 <strong>"+state.jobPage+"</strong>/<strong>"+totalPages+"</strong> 页";
+  try {
+  var hasProfile = !!(state.userProfile && state.userProfile.education); var filtered=getJobsData().filter(matchFilters); var total=filtered.length; var totalPages=Math.ceil(total/state.pageSize)||1; if(state.jobPage>totalPages)state.jobPage=totalPages; var paged=filtered.slice((state.jobPage-1)*state.pageSize, state.jobPage*state.pageSize); var w=$("#jobTableWrap"); var c=$("#resultCount"); if(c)c.innerHTML="共 <strong>"+total+"</strong> 条，第 <strong>"+state.jobPage+"</strong>/<strong>"+totalPages+"</strong> 页";
 
   var h='<div class="table-scroll"><table class="job-table"><thead><tr>';
 
