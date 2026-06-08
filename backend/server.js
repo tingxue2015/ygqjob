@@ -15,7 +15,7 @@ const fs = require("fs");
 try { require("dotenv").config({ path: path.join(__dirname, ".env") }); } catch (_) {}
 
 const PORT = process.env.PORT || 3000;
-const STATIC_PATH = process.env.STATIC_PATH || path.join(__dirname, "..");
+const STATIC_PATH = path.resolve(__dirname, process.env.STATIC_PATH || "..");
 const ALLOWED_ORIGIN = (process.env.ALLOWED_ORIGIN || "http://localhost:3000").split(",");
 
 // ============ 初始化数据 ============
@@ -91,7 +91,7 @@ app.use("/api/*", (req, res) => {
 // 前端 SPA fallback
 app.get("*", (req, res) => {
   if (req.path.startsWith("/api/")) return;
-  res.sendFile(path.join(STATIC_PATH, "index.html"));
+  res.sendFile(path.resolve(STATIC_PATH, "index.html"));
 });
 
 // ============ 全局错误处理 ============
