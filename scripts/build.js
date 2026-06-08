@@ -1,4 +1,4 @@
-﻿const fs = require("fs");
+const fs = require("fs");
 const path = require("path");
 
 const ROOT = path.resolve(__dirname, "..");
@@ -24,6 +24,7 @@ function cleanModule(content) {
   let lines = content.split(/\r?\n/);
   while (lines.length > 0) {
     let first = lines[0];
+    if (first.trim() === "") { lines.shift(); continue; }
     // If the line is purely a marker: // ======== (no code after the markers)
     if (/^\/\/\s*={5,}\s*$/.test(first.trim())) {
       lines.shift();
@@ -35,8 +36,8 @@ function cleanModule(content) {
     let m = first.match(/^\/\/\s*={3,}[^=\n]*={3,}\s*/);
     if (m && m[0].length < 120) {
       lines[0] = first.substring(m[0].length);
-      // Don't shift - just trimmed the prefix
-      break;
+      // Don't shift - just trimmed the prefix; continue to process remaining lines
+      continue;
     }
     break;
   }
