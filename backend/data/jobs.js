@@ -1,4 +1,3 @@
-﻿[
 [
   {id:1,company:'中国航天科技集团有限公司',logo:'航天',companyType:'central',industry:'航空航天',recruitType:'autumn',target:'master',location:'beijing',job:'飞行器总体设计工程师',appStatus:'none',updateDate:'2026-06-03',deadline:'2026-06-30',officialUrl:'https://www.spacechina.com',applyUrl:'https://www.spacetalent.com.cn',announcement:'中国航天科技集团2026届校园招聘公告',examInfo:'专业笔试（航天器设计原理）+技术面试+综合面试+政审',companySize:'170000+人',welfare:['北京落户','事业编制','安家费','人才公寓','子女教育'],notes:'航空航天/力学/控制工程硕士及以上，党员优先',regulator:'国资委',fortune:'世界500强',graduateYear:'2026届',degree:'硕士及以上',verified:true},
   {id:2,company:'中国船舶集团有限公司',logo:'中船',companyType:'central',industry:'国防军工',recruitType:'spring',target:'master',location:'shanghai',job:'船舶与海洋工程设计工程师',appStatus:'applied',updateDate:'2026-06-02',deadline:'2026-06-15',officialUrl:'https://www.cssc.net.cn',applyUrl:'https://www.cssc.net.cn',announcement:'中国船舶集团2026年春季校园招聘公告',examInfo:'行测+专业笔试（船舶设计）+半结构化面试',companySize:'300000+人',welfare:['上海落户','人才公寓','六险二金','科研项目奖金'],notes:'船舶与海洋工程/轮机工程专业',regulator:'国资委',fortune:'世界500强',graduateYear:'2026届',degree:'硕士及以上',verified:true},
@@ -1739,18 +1738,4 @@
   {id:1729,company:'重庆市涪陵国有资产投资经营集团有限公司',logo:'涪陵国投',companyType:'local',industry:'国有资本',recruitType:'spring',target:'bachelor',location:'other',job:'投融资管理',appStatus:'none',updateDate:'2026-06-03',deadline:'2026-07-31',officialUrl:'https://www.fl.gov.cn',applyUrl:'https://www.fl.gov.cn',announcement:'重庆市涪陵国有资产投资经营集团有限公司2026年春季招聘公告',examInfo:'行测+结构化面试',companySize:'500+人',welfare:['六险二金','住房补贴'],notes:'金融/会计本科及以上',regulator:'涪陵区国资委',fortune:'未参评',graduateYear:'2026届',degree:'本科及以上',verified:true},
   {id:1730,company:'天津市滨海新区国有资本投资运营有限公司',logo:'滨海国投',companyType:'local',industry:'国有资本',recruitType:'spring',target:'bachelor',location:'tianjin',job:'投资管理岗',appStatus:'none',updateDate:'2026-06-03',deadline:'2026-07-31',officialUrl:'https://www.bh.gov.cn',applyUrl:'https://www.bh.gov.cn',announcement:'天津市滨海新区国有资本投资运营有限公司2026年春季招聘公告',examInfo:'行测+结构化面试',companySize:'500+人',welfare:['六险二金','住房补贴','年终奖金'],notes:'金融/会计本科及以上',regulator:'滨海新区国资委',fortune:'未参评',graduateYear:'2026届',degree:'本科及以上',verified:true},
   {id:1731,company:'天津市武清区国有资产经营投资有限公司',logo:'武清国投',companyType:'local',industry:'资产管理',recruitType:'spring',target:'bachelor',location:'other',job:'资产管理岗',appStatus:'none',updateDate:'2026-06-03',deadline:'2026-07-31',officialUrl:'https://www.wq.gov.cn',applyUrl:'https://www.wq.gov.cn',announcement:'天津市武清区国有资产经营投资有限公司2026年春季招聘公告',examInfo:'行测+结构化面试',companySize:'500+人',welfare:['六险二金','住房补贴'],notes:'财务管理本科及以上',regulator:'武清区国资委',fortune:'未参评',graduateYear:'2026届',degree:'本科及以上',verified:true},
-  ];
-
-// ===== 进度管理看板数据 =====
-
-
-const mockReferrals = [
-  {id:1,company:'中国航天科技集团有限公司',department:'空间技术研究院',referrer:'张研究员',code:'CASC2026',position:'高级研究员'},
-  {id:2,company:'国家电网有限公司',department:'电力调度控制中心',referrer:'李高工',code:'SGCC26A',position:'高级工程师'},
-  {id:3,company:'中国电信集团有限公司',department:'网络运营部',referrer:'王经理',code:'CT2026',position:'部门经理'},
-  {id:4,company:'中国船舶集团有限公司',department:'船舶设计研究所',referrer:'赵主任',code:'CSSC626',position:'研究室主任'},
-  {id:5,company:'招商局集团有限公司',department:'集团战略发展部',referrer:'陈总监',code:'CMHK26',position:'战略总监'},
-  {id:6,company:'华润（集团）有限公司',department:'人力资源部',referrer:'刘经理',code:'CRC2026',position:'HR经理'},
-  {id:7,company:'中国建筑集团有限公司',department:'海外事业部',referrer:'孙总工',code:'CSCEC26',position:'总工程师'}
-]
 ]

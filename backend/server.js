@@ -1,4 +1,4 @@
-// ===== 央国企招聘平台 - 后端API服务 =====
+﻿// ===== 央国企招聘平台 - 后端API服务 =====
 // Node.js + Express + JWT认证
 // 启动: npm start  或  node server.js
 
@@ -74,13 +74,14 @@ app.use(express.static(STATIC_PATH, {
   maxAge: "1h",
   setHeaders: (res, filePath) => {
     if (filePath.endsWith(".html")) res.setHeader("Cache-Control", "no-cache");
-    if (filePath.endsWith(".js") || filePath.endsWith(".css")) res.setHeader("Cache-Control", "public, max-age=3600");
+    if (filePath.endsWith(".js") || filePath.endsWith(".css")) res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
   }
 }));
 
 // ============ API路由 ============
 app.use("/api/jobs", apiLimiter, require("./routes/jobs"));
 app.use("/api/auth", authLimiter, require("./routes/auth"));
+app.use("/api/search", apiLimiter, require("./routes/search"));
 
 // API 404
 app.use("/api/*", (req, res) => {
